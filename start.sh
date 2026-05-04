@@ -43,40 +43,39 @@ NPX_BIN="$NODE_DIR/bin/npx"
 mkdir -p "$ENGINE_DIR"
 
 if [ ! -f "$NODE_BIN" ]; then
-    echo -e "${YELLOW}[~] Node.js not found for $PLATFORM-$NODE_ARCH. Downloading...${RESET}"
+    echo -e "${YELLOW}[~] Node.js not found. Target: $PLATFORM-$NODE_ARCH${RESET}"
     
-    # Ensure the engine directory exists before downloading
-    mkdir -p "$ENGINE_DIR"
-    
-    NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${PLATFORM}-${NODE_ARCH}.tar.gz"
+    # Force the specific M4-compatible URL
+    NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-arm64.tar.gz"
     TEMP_TAR="$ENGINE_DIR/node_temp.tar.gz"
 
-    # Use -# for a progress bar and -f to fail on 404/server errors
-    curl -L -# -f "$NODE_URL" -o "$TEMP_TAR"
-    
+    echo -e "${YELLOW}[~] Downloading from: ${DIM}$NODE_URL${RESET}"
+
+    # Optimized curl: 
+    # --connect-timeout: Gives the handshake more time
+    # --retry: Automatically tries again if the connection drops
+    # -k: (Optional) bypasses SSL issues if your network filter is causing the 443 block
+    curl -L -# -f \
+        --connect-timeout 15 \
+        --retry 3 \
+        --retry-delay 2 \
+        "$NODE_URL" -o "$TEMP_TAR"
+
     if [ $? -ne 0 ]; then
-        echo -e "${RED}[ERROR] Failed to download Node.js! Check your internet connection.${RESET}"
-        # Cleanup if download failed
-        [ -f "$TEMP_TAR" ] && rm "$TEMP_TAR"
+        echo -e "${RED}[ERROR] Connection failed.${RESET}"
+        echo -e "${YELLOW}[TIP] If you still see 'Failed to connect', try running: ${CYAN}export https_proxy=...${RESET} (if on a work network)."
         exit 1
     fi
 
-    echo -e "${YELLOW}[~] Extracting Node.js...${RESET}"
-    
-    # Create the specific node directory and extract
+    echo -e "${YELLOW}[~] Extracting to engine folder...${RESET}"
     mkdir -p "$NODE_DIR"
-    
-    # --strip-components=1 removes the top-level folder inside the tar
     if tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1; then
-        echo -e "${GREEN}[OK] Node.js installed to $NODE_DIR${RESET}"
+        echo -e "${GREEN}[OK] Node.js is ready for M4 Architecture.${RESET}"
+        rm "$TEMP_TAR"
     else
-        echo -e "${RED}[ERROR] Extraction failed. The downloaded file might be corrupt.${RESET}"
-        rm -rf "$NODE_DIR"
+        echo -e "${RED}[ERROR] Extraction failed.${RESET}"
         exit 1
     fi
-    
-    # Cleanup the temp file
-    rm "$TEMP_TAR"
 fi
 
 export PATH="$NODE_DIR/bin:$PATH"
