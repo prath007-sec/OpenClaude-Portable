@@ -43,41 +43,42 @@ NPX_BIN="$NODE_DIR/bin/npx"
 mkdir -p "$ENGINE_DIR"
 
 if [ ! -f "$NODE_BIN" ]; then
-    echo -e "${YELLOW}[~] Node.js not found. Target: $PLATFORM-$NODE_ARCH${RESET}"
+    echo -e "${YELLOW}[~] Detecting latest Node.js for Mac Apple Silicon...${RESET}"
     
-    # Force the specific M4-compatible URL
-    NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-arm64.tar.gz"
-    TEMP_TAR="$ENGINE_DIR/node_temp.tar.gz"
+    # This URL automatically points to the latest stable Apple Silicon build
+    # It bypasses the need to manually update a version number in the script
+    NODE_URL="https://nodejs.org/dist/latest/node-$(curl -k -s https://nodejs.org/dist/latest/ | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | head -1)-darwin-arm64.tar.gz"
+    
+    # If the dynamic check above fails, we use this direct fallback to the latest v22
+    if [[ $NODE_URL != *"v"* ]]; then
+        NODE_URL="https://nodejs.org/dist/latest-v22.x/node-v22.14.0-darwin-arm64.tar.gz"
+    fi
 
-    echo -e "${YELLOW}[~] Downloading from: ${DIM}$NODE_URL${RESET}"
+    TEMP_TAR="$ENGINE_DIR/node.tar.gz"
 
-    # Optimized curl: 
-    # --connect-timeout: Gives the handshake more time
-    # --retry: Automatically tries again if the connection drops
-    # -k: (Optional) bypasses SSL issues if your network filter is causing the 443 block
-    curl -L -# -f \
-        --connect-timeout 15 \
-        --retry 3 \
-        --retry-delay 2 \
-        "$NODE_URL" -o "$TEMP_TAR"
+    echo -e "${CYAN}[~] Fetching latest from: ${DIM}$NODE_URL${RESET}"
+
+    # -k: Insecure mode (bypasses the 21ms connection rejection/SSL issues)
+    # --retry: Try 5 times because of the previous connection failures
+    curl -k -L -# -f --retry 5 --connect-timeout 30 "$NODE_URL" -o "$TEMP_TAR"
 
     if [ $? -ne 0 ]; then
-        echo -e "${RED}[ERROR] Connection failed.${RESET}"
-        echo -e "${YELLOW}[TIP] If you still see 'Failed to connect', try running: ${CYAN}export https_proxy=...${RESET} (if on a work network)."
+        echo -e "${RED}[ERROR] Download failed.${RESET}"
+        echo -e "${YELLOW}Your network is likely blocking the Node.js domain in the Terminal.${RESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}[~] Extracting to engine folder...${RESET}"
+    echo -e "${GREEN}[OK] Download complete. Extracting...${RESET}"
+    
     mkdir -p "$NODE_DIR"
     if tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1; then
-        echo -e "${GREEN}[OK] Node.js is ready for M4 Architecture.${RESET}"
+        echo -e "${GREEN}[OK] Latest Node.js is installed for M4 Architecture.${RESET}"
         rm "$TEMP_TAR"
     else
-        echo -e "${RED}[ERROR] Extraction failed.${RESET}"
+        echo -e "${RED}[ERROR] Extraction failed. Check if the disk is full.${RESET}"
         exit 1
     fi
 fi
-
 export PATH="$NODE_DIR/bin:$PATH"
 
 if [ ! -d "$ENGINE_DIR/node_modules/@gitlawb/openclaude" ]; then
