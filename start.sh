@@ -42,53 +42,57 @@ NPX_BIN="$NODE_DIR/bin/npx"
 
 mkdir -p "$ENGINE_DIR"
 
+# =================================================================
+#  Node.js Engine - Fixed Version v24.15.0 (Mac Apple Silicon)
+# =================================================================
+
+# Clear any terminal-specific proxy blocks causing the 21ms error
+unset http_proxy; unset https_proxy; unset ALL_PROXY
+
+# Explicit version targeting for your M4
+FIXED_VERSION="24.1.0"
+NODE_URL="https://nodejs.org/dist/v${FIXED_VERSION}/node-v${FIXED_VERSION}-darwin-arm64.tar.gz"
+TEMP_TAR="$ENGINE_DIR/node.tar.gz"
+
 if [ ! -f "$NODE_BIN" ]; then
-    echo -e "${YELLOW}[~] Setting up Node.js for Mac Apple Silicon (M4)...${RESET}"
+    echo -e "${YELLOW}[~] Checking for Node.js v${FIXED_VERSION}...${RESET}"
     
-    # Target the official latest stable build for Darwin ARM64
-    NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-arm64.tar.gz"
-    TEMP_TAR="$ENGINE_DIR/node.tar.gz"
-
-    echo -e "${CYAN}[~] Target URL: ${DIM}$NODE_URL${RESET}"
-
-    # 2. Resilient Download Command
-    # -4: Forces IPv4 (bypasses IPv6 routing glitches)
-    # -k: Insecure mode (bypasses local SSL/Gatekeeper interference)
-    # --retry-all-errors: Forces curl to keep trying if the connection is blipped
-    curl -k -L -# -f -4 \
-        --connect-timeout 20 \
-        --retry 5 \
-        --retry-delay 2 \
-        --retry-all-errors \
-        "$NODE_URL" -o "$TEMP_TAR"
-
-    if [ $? -ne 0 ]; then
-        echo ""
-        echo -e "${RED}[ERROR] Terminal download failed (Connection Refused).${RESET}"
-        echo -e "${YELLOW}---------------------------------------------------------${RESET}"
-        echo -e " ${BOLD}LOCAL FIX FOR MAC:${RESET}"
-        echo -e " 1. Your Mac is blocking Terminal from reaching nodejs.org."
-        echo -e " 2. Copy/Paste the URL above into Safari to download it."
-        echo -e " 3. Move the file to: ${CYAN}$ENGINE_DIR/node.tar.gz${RESET}"
-        echo -e " 4. Run this script again.${RESET}"
-        echo -e "${YELLOW}---------------------------------------------------------${RESET}"
-        exit 1
+    # Check if the file is already there (manual placement)
+    if [ ! -f "$TEMP_TAR" ]; then
+        echo -e "${CYAN}[~] Downloading from: ${DIM}$NODE_URL${RESET}"
+        
+        # -4 forces IPv4, -k ignores SSL issues, --retry-all-errors handles jitters
+        curl -k -L -4 -f \
+            --connect-timeout 20 \
+            --retry 5 \
+            --retry-all-errors \
+            "$NODE_URL" -o "$TEMP_TAR"
     fi
 
-    echo -e "${GREEN}[OK] Download complete. Extracting engine...${RESET}"
-    
-    # 3. Clean Extraction
-    mkdir -p "$NODE_DIR"
-    # --strip-components=1 ensures we don't get a nested 'node-v22...' folder
-    if tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1; then
-        echo -e "${GREEN}[OK] Node.js is now portable on your M4 Mac.${RESET}"
-        rm "$TEMP_TAR"
+    if [ -f "$TEMP_TAR" ]; then
+        echo -e "${GREEN}[OK] File found. Extracting to $NODE_DIR...${RESET}"
+        mkdir -p "$NODE_DIR"
         
-        # 4. Remove macOS Quarantine (Ensures the binary can actually run)
-        xattr -rd com.apple.quarantine "$NODE_DIR" 2>/dev/null
+        # Extract and strip the top-level directory folder
+        if tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1; then
+            echo -e "${GREEN}[OK] Extraction successful.${RESET}"
+            rm "$TEMP_TAR"
+            
+            # Remove the "Downloaded from Internet" flag so Mac allows it to run
+            xattr -rd com.apple.quarantine "$NODE_DIR" 2>/dev/null
+        else
+            echo -e "${RED}[ERROR] Extraction failed. The tar.gz might be incomplete.${RESET}"
+            exit 1
+        fi
     else
-        echo -e "${RED}[ERROR] Extraction failed. The file might be corrupted.${RESET}"
-        rm -rf "$NODE_DIR"
+        echo -e "${RED}[!] INSTANT CONNECTION REFUSAL DETECTED.${RESET}"
+        echo -e "${YELLOW}---------------------------------------------------------${RESET}"
+        echo -e " ${BOLD}DIRECT SAFARI FIX (Fail-Proof):${RESET}"
+        echo -e " 1. Click this link: ${CYAN}$NODE_URL${RESET}"
+        echo -e " 2. Move the downloaded file into the folder: ${BOLD}engine/${RESET}"
+        echo -e " 3. Rename it to: ${BOLD}node.tar.gz${RESET}"
+        echo -e " 4. Run ./start.sh again.${RESET}"
+        echo -e "${YELLOW}---------------------------------------------------------${RESET}"
         exit 1
     fi
 fi
