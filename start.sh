@@ -44,17 +44,39 @@ mkdir -p "$ENGINE_DIR"
 
 if [ ! -f "$NODE_BIN" ]; then
     echo -e "${YELLOW}[~] Node.js not found for $PLATFORM-$NODE_ARCH. Downloading...${RESET}"
+    
+    # Ensure the engine directory exists before downloading
+    mkdir -p "$ENGINE_DIR"
+    
     NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${PLATFORM}-${NODE_ARCH}.tar.gz"
-    TEMP_TAR="$ENGINE_DIR/node.tar.gz"
-    curl -L "$NODE_URL" -o "$TEMP_TAR"
+    TEMP_TAR="$ENGINE_DIR/node_temp.tar.gz"
+
+    # Use -# for a progress bar and -f to fail on 404/server errors
+    curl -L -# -f "$NODE_URL" -o "$TEMP_TAR"
+    
     if [ $? -ne 0 ]; then
-        echo -e "${RED}[ERROR] Failed to download Node.js!${RESET}"
+        echo -e "${RED}[ERROR] Failed to download Node.js! Check your internet connection.${RESET}"
+        # Cleanup if download failed
+        [ -f "$TEMP_TAR" ] && rm "$TEMP_TAR"
         exit 1
     fi
+
+    echo -e "${YELLOW}[~] Extracting Node.js...${RESET}"
+    
+    # Create the specific node directory and extract
     mkdir -p "$NODE_DIR"
-    tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1
+    
+    # --strip-components=1 removes the top-level folder inside the tar
+    if tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1; then
+        echo -e "${GREEN}[OK] Node.js installed to $NODE_DIR${RESET}"
+    else
+        echo -e "${RED}[ERROR] Extraction failed. The downloaded file might be corrupt.${RESET}"
+        rm -rf "$NODE_DIR"
+        exit 1
+    fi
+    
+    # Cleanup the temp file
     rm "$TEMP_TAR"
-    echo -e "${GREEN}[OK] Node.js installed to $NODE_DIR${RESET}"
 fi
 
 export PATH="$NODE_DIR/bin:$PATH"
