@@ -43,39 +43,52 @@ NPX_BIN="$NODE_DIR/bin/npx"
 mkdir -p "$ENGINE_DIR"
 
 if [ ! -f "$NODE_BIN" ]; then
-    echo -e "${YELLOW}[~] Detecting latest Node.js for Mac Apple Silicon...${RESET}"
+    echo -e "${YELLOW}[~] Setting up Node.js for Mac Apple Silicon (M4)...${RESET}"
     
-    # This URL automatically points to the latest stable Apple Silicon build
-    # It bypasses the need to manually update a version number in the script
-    NODE_URL="https://nodejs.org/dist/latest/node-$(curl -k -s https://nodejs.org/dist/latest/ | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | head -1)-darwin-arm64.tar.gz"
-    
-    # If the dynamic check above fails, we use this direct fallback to the latest v22
-    if [[ $NODE_URL != *"v"* ]]; then
-        NODE_URL="https://nodejs.org/dist/latest-v22.x/node-v22.14.0-darwin-arm64.tar.gz"
-    fi
-
+    # Target the official latest stable build for Darwin ARM64
+    NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-arm64.tar.gz"
     TEMP_TAR="$ENGINE_DIR/node.tar.gz"
 
-    echo -e "${CYAN}[~] Fetching latest from: ${DIM}$NODE_URL${RESET}"
+    echo -e "${CYAN}[~] Target URL: ${DIM}$NODE_URL${RESET}"
 
-    # -k: Insecure mode (bypasses the 21ms connection rejection/SSL issues)
-    # --retry: Try 5 times because of the previous connection failures
-    curl -k -L -# -f --retry 5 --connect-timeout 30 "$NODE_URL" -o "$TEMP_TAR"
+    # 2. Resilient Download Command
+    # -4: Forces IPv4 (bypasses IPv6 routing glitches)
+    # -k: Insecure mode (bypasses local SSL/Gatekeeper interference)
+    # --retry-all-errors: Forces curl to keep trying if the connection is blipped
+    curl -k -L -# -f -4 \
+        --connect-timeout 20 \
+        --retry 5 \
+        --retry-delay 2 \
+        --retry-all-errors \
+        "$NODE_URL" -o "$TEMP_TAR"
 
     if [ $? -ne 0 ]; then
-        echo -e "${RED}[ERROR] Download failed.${RESET}"
-        echo -e "${YELLOW}Your network is likely blocking the Node.js domain in the Terminal.${RESET}"
+        echo ""
+        echo -e "${RED}[ERROR] Terminal download failed (Connection Refused).${RESET}"
+        echo -e "${YELLOW}---------------------------------------------------------${RESET}"
+        echo -e " ${BOLD}LOCAL FIX FOR MAC:${RESET}"
+        echo -e " 1. Your Mac is blocking Terminal from reaching nodejs.org."
+        echo -e " 2. Copy/Paste the URL above into Safari to download it."
+        echo -e " 3. Move the file to: ${CYAN}$ENGINE_DIR/node.tar.gz${RESET}"
+        echo -e " 4. Run this script again.${RESET}"
+        echo -e "${YELLOW}---------------------------------------------------------${RESET}"
         exit 1
     fi
 
-    echo -e "${GREEN}[OK] Download complete. Extracting...${RESET}"
+    echo -e "${GREEN}[OK] Download complete. Extracting engine...${RESET}"
     
+    # 3. Clean Extraction
     mkdir -p "$NODE_DIR"
+    # --strip-components=1 ensures we don't get a nested 'node-v22...' folder
     if tar -xzf "$TEMP_TAR" -C "$NODE_DIR" --strip-components=1; then
-        echo -e "${GREEN}[OK] Latest Node.js is installed for M4 Architecture.${RESET}"
+        echo -e "${GREEN}[OK] Node.js is now portable on your M4 Mac.${RESET}"
         rm "$TEMP_TAR"
+        
+        # 4. Remove macOS Quarantine (Ensures the binary can actually run)
+        xattr -rd com.apple.quarantine "$NODE_DIR" 2>/dev/null
     else
-        echo -e "${RED}[ERROR] Extraction failed. Check if the disk is full.${RESET}"
+        echo -e "${RED}[ERROR] Extraction failed. The file might be corrupted.${RESET}"
+        rm -rf "$NODE_DIR"
         exit 1
     fi
 fi
