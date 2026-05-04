@@ -79,6 +79,7 @@ if [ ! -f "$NODE_BIN" ]; then
         exit 1
     fi
 fi
+
 export PATH="$NODE_DIR/bin:$PATH"
 
 if [ ! -d "$ENGINE_DIR/node_modules/@gitlawb/openclaude" ]; then
